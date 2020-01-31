@@ -775,6 +775,7 @@ PCODE ReadyToRunInfo::GetEntryPoint(MethodDesc * pMD, PrepareCodeConfig* pConfig
 
     _ASSERTE(id < m_nRuntimeFunctions);
     pEntryPoint = dac_cast<TADDR>(m_pLayout->GetBase()) + m_pRuntimeFunctions[id].BeginAddress;
+    printf("ReadyToRunInfo::GetEntryPoint: pEntryPoint=%08x (m_pLayout->GetBase()=%08x; m_pRuntimeFunctions[%d].BeginAddress=%08x)\n", pEntryPoint, m_pLayout->GetBase(), id,  m_pRuntimeFunctions[id].BeginAddress);
 
     {
         CrstHolder ch(&m_Crst);

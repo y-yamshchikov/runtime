@@ -433,6 +433,7 @@ PCODE MethodDesc::GetPrecompiledCode(PrepareCodeConfig* pConfig)
     else
     {
         pCode = GetPrecompiledR2RCode(pConfig);
+	printf("MethodDesc::GetPrecompiledCode: after GetPrecompiledR2RCode pCode=%08x\n", pCode);
         if (pCode != NULL)
         {
             LOG_USING_R2R_CODE(this);

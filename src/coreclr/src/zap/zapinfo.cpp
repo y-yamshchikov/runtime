@@ -1791,11 +1791,13 @@ void * ZapInfo::getHelperFtn (CorInfoHelpFunc ftnNum, void **ppIndirection)
         if (fOptimizeForSize)
         {
             *ppIndirection = NULL;
+	    printf("zapper: getHelperFtn: GetIndirectHelperThunk: %08x\n", m_pImage->GetImportTable()->GetIndirectHelperThunk(helperNum));
             return m_pImage->GetImportTable()->GetIndirectHelperThunk(helperNum);
         }
         else
         {
             *ppIndirection = m_pImage->GetImportTable()->GetHelperImport(helperNum);
+	    printf("zapper: getHelperFtn: GetHelperImport: %08x\n", *ppIndirection); 
             return NULL;
         }
     }
