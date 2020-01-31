@@ -82,7 +82,7 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
                     FrameInfo frameInfo = method.FrameInfos[frameIndex];
 
                     // StartOffset of the runtime function
-                    runtimeFunctionsBuilder.EmitReloc(method, RelocType.IMAGE_REL_BASED_ADDR32NB, delta: frameInfo.StartOffset);
+                    runtimeFunctionsBuilder.EmitReloc(method, RelocType.IMAGE_REL_BASED_ADDR32NB, delta: frameInfo.StartOffset + 1/*THUMB_CODE*/);
                     if (!relocsOnly && Target.Architecture == TargetArchitecture.X64)
                     {
                         // On Amd64, the 2nd word contains the EndOffset of the runtime function
