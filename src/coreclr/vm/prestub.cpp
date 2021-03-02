@@ -1915,123 +1915,13 @@ static PCODE PreStubWorker_Preemptive(
     return pbRetVal;
 }
 
-extern "C" PCODE STDCALL PreStubWorker_Intermodule(TransitionBlock* pTransitionBlock, MethodDesc* pMD, Module* pModule)
-{
-    PCODE pbRetVal = NULL;
-
-    BEGIN_PRESERVE_LAST_ERROR;
-
-    STATIC_CONTRACT_THROWS;
-    STATIC_CONTRACT_GC_TRIGGERS;
-    STATIC_CONTRACT_MODE_ANY;
-    STATIC_CONTRACT_ENTRY_POINT;
-
-    _ASSERTE(!NingenEnabled() && "You cannot invoke managed code inside the ngen compilation process.");
-
-    ETWOnStartup(PrestubWorker_V1, PrestubWorkerEnd_V1);
-
-#if defined(HOST_OSX) && defined(HOST_ARM64)
-    auto jitWriteEnableHolder = PAL_JITWriteEnable(true);
-#endif // defined(HOST_OSX) && defined(HOST_ARM64)
-
-    MAKE_CURRENT_THREAD_AVAILABLE();
-
-    // Attempt to check what GC mode we are running under.
-    if (CURRENT_THREAD == NULL
-        || !CURRENT_THREAD->PreemptiveGCDisabled())
-    {
-        pbRetVal = PreStubWorker_Preemptive(pTransitionBlock, pMD, CURRENT_THREAD, pModule);
-    }
-    else
-    {
-        // This is the typical case (i.e. COOP mode).
-
-#ifdef _DEBUG
-        Thread::ObjectRefFlush(CURRENT_THREAD);
-#endif
-
-        FrameWithCookie<PrestubMethodFrame> frame(pTransitionBlock, pMD);
-        PrestubMethodFrame* pPFrame = &frame;
-
-        pPFrame->Push(CURRENT_THREAD);
-
-        INSTALL_MANAGED_EXCEPTION_DISPATCHER;
-        INSTALL_UNWIND_AND_CONTINUE_HANDLER;
-
-        // Make sure the method table is restored, and method instantiation if present
-        pMD->CheckRestore();
-        CONSISTENCY_CHECK(GetAppDomain()->CheckCanExecuteManagedCode(pMD));
-
-        MethodTable* pDispatchingMT = NULL;
-        if (pMD->IsVtableMethod())
-        {
-            OBJECTREF curobj = pPFrame->GetThis();
-
-            if (curobj != NULL) // Check for virtual function called non-virtually on a NULL object
-            {
-                pDispatchingMT = curobj->GetMethodTable();
-
-                if (pDispatchingMT->IsICastable() || pDispatchingMT->IsIDynamicInterfaceCastable())
-                {
-                    MethodTable* pMDMT = pMD->GetMethodTable();
-                    TypeHandle objectType(pDispatchingMT);
-                    TypeHandle methodType(pMDMT);
-
-                    GCStress<cfg_any>::MaybeTrigger();
-                    INDEBUG(curobj = NULL); // curobj is unprotected and CanCastTo() can trigger GC
-                    if (!objectType.CanCastTo(methodType))
-                    {
-                        // Apparently ICastable magic was involved when we chose this method to be called
-                        // that's why we better stick to the MethodTable it belongs to, otherwise
-                        // DoPrestub() will fail not being able to find implementation for pMD in pDispatchingMT.
-
-                        pDispatchingMT = pMDMT;
-                    }
-                }
-
-                // For value types, the only virtual methods are interface implementations.
-                // Thus pDispatching == pMT because there
-                // is no inheritance in value types.  Note the BoxedEntryPointStubs are shared
-                // between all sharable generic instantiations, so the == test is on
-                // canonical method tables.
-#ifdef _DEBUG
-                MethodTable* pMDMT = pMD->GetMethodTable(); // put this here to see what the MT is in debug mode
-                _ASSERTE(!pMD->GetMethodTable()->IsValueType() ||
-                (pMD->IsUnboxingStub() && (pDispatchingMT->GetCanonicalMethodTable() == pMDMT->GetCanonicalMethodTable())));
-#endif // _DEBUG
-            }
-        }
-
-        GCX_PREEMP_THREAD_EXISTS(CURRENT_THREAD);
-        pbRetVal = pMD->DoPrestub(pDispatchingMT, CallerGCMode::Coop, pModule);
-
-        UNINSTALL_UNWIND_AND_CONTINUE_HANDLER;
-        UNINSTALL_MANAGED_EXCEPTION_DISPATCHER;
-
-        {
-            HardwareExceptionHolder;
-
-            // Give debugger opportunity to stop here
-            ThePreStubPatch();
-        }
-
-        pPFrame->Pop(CURRENT_THREAD);
-    }
-
-    POSTCONDITION(pbRetVal != NULL);
-
-    END_PRESERVE_LAST_ERROR;
-
-    return pbRetVal;
-}
-
 //=============================================================================
 // This function generates the real code for a method and installs it into
 // the methoddesc. Usually ***BUT NOT ALWAYS***, this function runs only once
 // per methoddesc. In addition to installing the new code, this function
 // returns a pointer to the new code for the prestub's convenience.
 //=============================================================================
-extern "C" PCODE STDCALL PreStubWorker(TransitionBlock* pTransitionBlock, MethodDesc* pMD)
+extern "C" PCODE STDCALL PreStubWorker_Intermodule(TransitionBlock* pTransitionBlock, MethodDesc* pMD, Module* pModule)
 {
     PCODE pbRetVal = NULL;
 
@@ -2141,6 +2031,11 @@ extern "C" PCODE STDCALL PreStubWorker(TransitionBlock* pTransitionBlock, Method
     END_PRESERVE_LAST_ERROR;
 
     return pbRetVal;
+}
+
+extern "C" PCODE STDCALL PreStubWorker(TransitionBlock* pTransitionBlock, MethodDesc* pMD)
+{
+	return PreStubWorker_Intermodule(pTransitionBlock, pMD, NULL /*pModule*/);
 }
 
 #ifdef _DEBUG
